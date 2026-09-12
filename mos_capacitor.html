@@ -1,0 +1,416 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interactive MOS Capacitor v20 compact</title>
+<style>
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    margin: 14px;
+    color: #111;
+    background: #fff;
+  }
+  .container {
+    max-width: 980px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 24px;
+    margin: 0 0 6px 0;
+  }
+  .subtitle {
+    font-size: 15px;
+    margin-bottom: 12px;
+    line-height: 1.35;
+  }
+  .controls {
+    border: 1px solid #ccc;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    background: #fafafa;
+  }
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    align-items: center;
+  }
+  label { font-weight: 700; }
+  input[type=range] { width: 320px; }
+  button {
+    font-size: 18px;
+    font-weight: 700;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid #999;
+    cursor: pointer;
+    background: #fff;
+  }
+  button:hover { background: #f0f0f0; }
+  .readout {
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .note {
+    margin-top: 8px;
+    font-size: 14px;
+    color: #333;
+    line-height: 1.35;
+  }
+  .status {
+    margin-top: 8px;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+  .figure-card {
+    border: 1px solid #ccc;
+    border-radius: 12px;
+    background: #fff;
+    padding: 10px 10px 6px 10px;
+    margin-bottom: 12px;
+  }
+  svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  .panel {
+    border: 1px solid #ccc;
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: #fafafa;
+    line-height: 1.45;
+  }
+  .phase {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+  .threshold-state {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .eq {
+    text-align: center;
+    font-size: 18px;
+    font-weight: 700;
+    margin-top: 10px;
+  }
+  ul { margin-top: 8px; margin-bottom: 0; }
+  li { margin-bottom: 4px; }
+  sub { font-size: 0.75em; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Interactive MOS Capacitor</h1>
+
+  <div class="subtitle">
+    Adjust the voltage source and observe the transition from a p-type substrate,
+    through depletion, to the formation of the inversion layer.
+  </div>
+
+  <div class="controls">
+    <div class="row">
+      <label for="vg">Source adjustment: V<sub>G</sub></label>
+      <button id="minusBtn" aria-label="Decrease voltage">−</button>
+      <input id="vg" type="range" min="0" max="5" step="0.1" value="0">
+      <button id="plusBtn" aria-label="Increase voltage">+</button>
+      <div class="readout">V<sub>G</sub> = <span id="vgValue">0.0</span> V</div>
+    </div>
+
+    <div class="note">
+      The positive charge on the gate is shown near the metal surface that faces the oxide, and the shaded region marks depletion.
+    </div>
+
+    <div class="status" id="statusText">
+      Low V<sub>G</sub>: the p-type substrate still has holes near the surface.
+    </div>
+  </div>
+
+  <div class="figure-card">
+    <svg viewBox="0 0 960 500" aria-label="Interactive MOS capacitor">
+      <text x="480" y="28" text-anchor="middle" font-size="18" font-weight="700">
+        MOS Structure with Depletion and Inversion
+      </text>
+
+      <!-- source on the left -->
+      <text x="92" y="64" text-anchor="middle" font-size="17" font-weight="700">
+        V<tspan baseline-shift="sub" font-size="12">G</tspan> Source
+      </text>
+
+      <!-- scale -->
+      <line x1="24" y1="132" x2="24" y2="320" stroke="#000" stroke-width="1.4"></line>
+      <line x1="24" y1="132" x2="34" y2="132" stroke="#000" stroke-width="1.4"></line>
+      <line x1="24" y1="179" x2="34" y2="179" stroke="#000"></line>
+      <line x1="24" y1="226" x2="34" y2="226" stroke="#000"></line>
+      <line x1="24" y1="273" x2="34" y2="273" stroke="#000"></line>
+      <line x1="24" y1="320" x2="34" y2="320" stroke="#000" stroke-width="1.4"></line>
+      <text x="40" y="136" font-size="14">5 V</text>
+      <text x="40" y="324" font-size="14">0 V</text>
+
+      <!-- battery -->
+      <rect x="68" y="132" width="82" height="188" fill="#fff" stroke="#000" stroke-width="2"></rect>
+      <rect x="95" y="120" width="28" height="12" fill="#fff" stroke="#000" stroke-width="2"></rect>
+      <rect id="batteryFill" x="76" y="312" width="66" height="0" fill="#d8d8d8"></rect>
+      <text x="109" y="158" text-anchor="middle" font-size="21" font-weight="700">+</text>
+      <text x="109" y="298" text-anchor="middle" font-size="23" font-weight="700">−</text>
+      <text id="batteryVoltageText" x="109" y="225" text-anchor="middle" font-size="22" font-weight="700">0.0 V</text>
+
+      <!-- structure -->
+      <rect x="260" y="95" width="560" height="56" fill="#e7e7e7" stroke="#000" stroke-width="2"></rect>
+      <rect x="260" y="151" width="560" height="24" fill="#f8f8f8" stroke="#000" stroke-width="2"></rect>
+      <rect x="260" y="175" width="560" height="255" fill="#fcfcfc" stroke="#000" stroke-width="2"></rect>
+
+      <text x="278" y="118" font-size="17" font-weight="700">Metal / Gate</text>
+      <text x="278" y="167" font-size="16" font-weight="700">Oxide</text>
+      <text x="278" y="404" font-size="19" font-weight="700">p-type silicon</text>
+
+      <!-- oxide-silicon interface -->
+      <line x1="260" y1="175" x2="820" y2="175" stroke="#000" stroke-width="1.4" stroke-dasharray="6,5"></line>
+      <text x="842" y="180" font-size="14">oxide–silicon</text>
+      <text x="842" y="198" font-size="14">interface</text>
+
+      <!-- source connections -->
+      <line x1="109" y1="120" x2="109" y2="86" stroke="#000" stroke-width="2.2"></line>
+      <line x1="109" y1="86" x2="540" y2="86" stroke="#000" stroke-width="2.2"></line>
+      <line x1="540" y1="86" x2="540" y2="95" stroke="#000" stroke-width="2.2"></line>
+
+      <line x1="109" y1="320" x2="109" y2="448" stroke="#000" stroke-width="2.2"></line>
+      <line x1="109" y1="448" x2="540" y2="448" stroke="#000" stroke-width="2.2"></line>
+      <line x1="540" y1="448" x2="540" y2="430" stroke="#000" stroke-width="2.2"></line>
+
+      <circle cx="540" cy="95" r="4" fill="#000"></circle>
+      <circle cx="540" cy="430" r="4" fill="#000"></circle>
+
+      <!-- dynamic groups -->
+      <g id="positiveCharges"></g>
+      <g id="holesSurface"></g>
+      <g id="holesDeep"></g>
+      <g id="negativeIons"></g>
+      <g id="electrons"></g>
+      <g id="depletionGuide"></g>
+      <g id="depletionLabel"></g>
+    </svg>
+  </div>
+
+  <div class="panel">
+    <div class="phase" id="phaseText">Stage: p-type substrate with no significant depletion</div>
+    <div class="threshold-state" id="thresholdState"></div>
+    <div id="phaseDetail1">Holes are present near the surface.</div>
+    <div id="phaseDetail2"></div>
+    <div id="phaseDetail3"></div>
+    <div class="eq">After threshold: Q<sub>inv</sub> ∝ C<sub>ox</sub>(V<sub>G</sub> − V<sub>TH</sub>)</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const slider = document.getElementById("vg");
+  const minusBtn = document.getElementById("minusBtn");
+  const plusBtn = document.getElementById("plusBtn");
+  const vgValue = document.getElementById("vgValue");
+  const batteryFill = document.getElementById("batteryFill");
+  const batteryVoltageText = document.getElementById("batteryVoltageText");
+  const positiveCharges = document.getElementById("positiveCharges");
+  const holesSurface = document.getElementById("holesSurface");
+  const holesDeep = document.getElementById("holesDeep");
+  const negativeIons = document.getElementById("negativeIons");
+  const electrons = document.getElementById("electrons");
+  const depletionGuide = document.getElementById("depletionGuide");
+  const depletionLabel = document.getElementById("depletionLabel");
+  const statusText = document.getElementById("statusText");
+  const phaseText = document.getElementById("phaseText");
+  const thresholdState = document.getElementById("thresholdState");
+  const phaseDetail1 = document.getElementById("phaseDetail1");
+  const phaseDetail2 = document.getElementById("phaseDetail2");
+  const phaseDetail3 = document.getElementById("phaseDetail3");
+
+  const VTH = 3.0;
+  const VDEP = 1.2;
+
+  function seededShuffle(list, seed) {
+    const arr = list.slice();
+    let s = seed >>> 0;
+    function rand() {
+      s = (1664525 * s + 1013904223) >>> 0;
+      return s / 4294967296;
+    }
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  const gatePlusPositions = [
+    [284,143],[330,140],[375,143],[420,140],[465,143],[510,140],
+    [555,143],[600,140],[645,143],[690,140],[735,143],[780,140],
+    [308,128],[398,128],[488,128],[578,128],[668,128],[758,128]
+  ];
+
+  const holesSurfacePos = [
+    [292,210],[350,216],[408,210],[466,216],[524,210],[582,216],[640,210],[698,216],[756,210],[804,216]
+  ];
+
+  const holesDeepPos = [
+    [310,298],[382,326],[454,354],[526,382],[598,326],[670,362],[742,306],
+    [332,408],[412,426],[504,312],[596,418],[688,388],[778,428]
+  ];
+
+  const ionPositions = [
+    [292,214],[338,214],[384,214],[430,214],[476,214],[522,214],[568,214],[614,214],[660,214],[706,214],[752,214],[798,214],
+    [315,246],[361,246],[407,246],[453,246],[499,246],[545,246],[591,246],[637,246],[683,246],[729,246],[775,246]
+  ];
+
+  const electronPositions = [
+    [288,198],[330,198],[372,198],[414,198],[456,198],[498,198],[540,198],[582,198],[624,198],[666,198],[708,198],[750,198],[792,198],
+    [310,208],[352,208],[394,208],[436,208],[478,208],[520,208],[562,208],[604,208],[646,208],[688,208],[730,208],[772,208],[814,208]
+  ];
+
+  const gateActivationOrder = seededShuffle(gatePlusPositions, 20260912);
+  const ionActivationOrder = seededShuffle(ionPositions, 74123);
+  const electronActivationOrder = seededShuffle(electronPositions, 91827);
+  const holeSurfaceActivationOrder = seededShuffle(holesSurfacePos, 31415);
+  const holeDeepActivationOrder = seededShuffle(holesDeepPos, 27182);
+
+  function setVoltage(v) {
+    const clamped = Math.max(0, Math.min(5, Math.round(v * 10) / 10));
+    slider.value = clamped.toFixed(1);
+    render();
+  }
+
+  function drawSubset(list, count, symbol, group, fontSize, fontWeight) {
+    let html = "";
+    for (let i = 0; i < count; i++) {
+      const [x, y] = list[i];
+      html += `<text x="${x}" y="${y}" font-size="${fontSize}" font-weight="${fontWeight}">${symbol}</text>`;
+    }
+    group.innerHTML = html;
+  }
+
+  function render() {
+    const vg = parseFloat(slider.value);
+
+    vgValue.textContent = vg.toFixed(1);
+    batteryVoltageText.textContent = vg.toFixed(1) + " V";
+
+    const fillHeight = (vg / 5) * 188;
+    const fillY = 320 - fillHeight;
+    batteryFill.setAttribute("y", fillY.toFixed(1));
+    batteryFill.setAttribute("height", fillHeight.toFixed(1));
+
+    const gateCount = Math.round((vg / 5) * gateActivationOrder.length);
+    drawSubset(gateActivationOrder, gateCount, "+", positiveCharges, 20, 700);
+
+    holesSurface.innerHTML = "";
+    holesDeep.innerHTML = "";
+    negativeIons.innerHTML = "";
+    electrons.innerHTML = "";
+    depletionGuide.innerHTML = "";
+    depletionLabel.innerHTML = "";
+
+    if (vg < VDEP) {
+      drawSubset(holeSurfaceActivationOrder, holeSurfaceActivationOrder.length, "h⁺", holesSurface, 17, 700);
+      drawSubset(holeDeepActivationOrder, 10, "h⁺", holesDeep, 17, 700);
+
+      statusText.innerHTML = "Low V<sub>G</sub>: the p-type substrate still has holes near the surface.";
+      phaseText.textContent = "Stage: p-type substrate with no significant depletion";
+      thresholdState.innerHTML = "";
+      phaseDetail1.textContent = "Holes are present near the surface.";
+      phaseDetail2.textContent = "Depletion is not yet dominant.";
+      phaseDetail3.textContent = "";
+      return;
+    }
+
+    if (vg < VTH) {
+      const depFrac = (vg - VDEP) / (VTH - VDEP);
+      const holeSurfaceCount = Math.max(0, Math.round((1 - depFrac) * holeSurfaceActivationOrder.length * 0.4));
+      const ionCount = Math.round((0.45 + 0.55 * depFrac) * ionActivationOrder.length);
+
+      drawSubset(holeSurfaceActivationOrder, holeSurfaceCount, "h⁺", holesSurface, 17, 700);
+      drawSubset(holeDeepActivationOrder, 12, "h⁺", holesDeep, 17, 700);
+      drawSubset(ionActivationOrder, ionCount, "⊖", negativeIons, 20, 700);
+
+      const depHeight = 74 + 30 * depFrac;
+      const depBottom = 178 + depHeight;
+      const depMidY = 178 + depHeight / 2;
+
+      depletionGuide.innerHTML = `
+        <rect x="268" y="178" width="544" height="${depHeight.toFixed(1)}"
+              fill="rgba(0,0,0,0.05)" stroke="none"></rect>
+        <line x1="268" y1="${depBottom.toFixed(1)}" x2="812" y2="${depBottom.toFixed(1)}"
+              stroke="#666" stroke-width="1.4" stroke-dasharray="6,5"></line>
+      `;
+      depletionLabel.innerHTML = `
+        <text x="834" y="${(depMidY - 5).toFixed(1)}" font-size="14" font-weight="700">Depletion</text>
+        <text x="834" y="${(depMidY + 13).toFixed(1)}" font-size="14" font-weight="700">region</text>
+      `;
+
+      statusText.innerHTML = "Depletion: holes are repelled and fixed negative ions remain near the surface.";
+      phaseText.textContent = "Stage: depletion";
+      thresholdState.innerHTML = "";
+      phaseDetail1.textContent = "Holes move away from the surface.";
+      phaseDetail2.textContent = "The shaded region is the depletion region.";
+      phaseDetail3.textContent = "There is not yet a well-formed inversion layer.";
+      return;
+    }
+
+    const invFrac = (vg - VTH) / (5 - VTH);
+    const electronCount = Math.round((0.2 + 0.8 * invFrac) * electronActivationOrder.length);
+
+    drawSubset(holeDeepActivationOrder, 11, "h⁺", holesDeep, 17, 700);
+    drawSubset(ionActivationOrder, ionActivationOrder.length, "⊖", negativeIons, 20, 700);
+    drawSubset(electronActivationOrder, electronCount, "e⁻", electrons, 17, 700);
+
+    const depHeightInv = 104;
+    const depMidYInv = 178 + depHeightInv / 2;
+
+    depletionGuide.innerHTML = `
+      <rect x="268" y="178" width="544" height="${depHeightInv}"
+            fill="rgba(0,0,0,0.05)" stroke="none"></rect>
+      <line x1="268" y1="282" x2="812" y2="282"
+            stroke="#666" stroke-width="1.4" stroke-dasharray="6,5"></line>
+      <line x1="268" y1="205" x2="812" y2="205"
+            stroke="#000" stroke-width="1.2" stroke-dasharray="4,4"></line>
+    `;
+    depletionLabel.innerHTML = `
+      <text x="834" y="${(depMidYInv - 5).toFixed(1)}" font-size="14" font-weight="700">Depletion</text>
+      <text x="834" y="${(depMidYInv + 13).toFixed(1)}" font-size="14" font-weight="700">region</text>
+    `;
+
+    const atThreshold = Math.abs(vg - VTH) < 0.051;
+
+    if (atThreshold) {
+      statusText.innerHTML = "V<sub>G</sub> = V<sub>TH</sub>: onset of inversion.";
+      phaseText.textContent = "Stage: onset of inversion";
+      thresholdState.innerHTML = "V<sub>G</sub> = V<sub>TH</sub>";
+      phaseDetail1.textContent = "The shaded region is the depletion region.";
+      phaseDetail2.textContent = "Electrons begin to appear at the oxide–silicon interface.";
+      phaseDetail3.textContent = "";
+    } else {
+      statusText.innerHTML = "V<sub>G</sub> > V<sub>TH</sub>: inversion layer present.";
+      phaseText.textContent = "Stage: inversion / channel formation";
+      thresholdState.innerHTML = "V<sub>G</sub> &gt; V<sub>TH</sub>";
+      phaseDetail1.textContent = "The shaded region is the depletion region.";
+      phaseDetail2.textContent = "Electrons are present at the oxide–silicon interface.";
+      phaseDetail3.textContent = "The inversion layer grows as V_G increases.";
+    }
+  }
+
+  slider.addEventListener("input", render);
+  minusBtn.addEventListener("click", () => setVoltage(parseFloat(slider.value) - 0.1));
+  plusBtn.addEventListener("click", () => setVoltage(parseFloat(slider.value) + 0.1));
+
+  render();
+})();
+</script>
+</body>
+</html>
