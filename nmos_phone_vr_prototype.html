@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#05070a" />
+  <title>IC Design Lab — NMOS VR Prototype</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #05070a;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      touch-action: none;
+    }
+    canvas { display: block; width: 100%; height: 100%; }
+
+    #start {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 50% 35%, rgba(25,45,75,.75), rgba(5,7,10,.96) 55%),
+        #05070a;
+      color: white;
+      padding: 24px;
+      text-align: center;
+    }
+    #card {
+      width: min(560px, calc(100vw - 40px));
+      padding: 28px;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 22px;
+      background: rgba(8,12,18,.82);
+      box-shadow: 0 20px 70px rgba(0,0,0,.45);
+      backdrop-filter: blur(8px);
+    }
+    #card h1 { margin: 0 0 10px; font-size: clamp(25px, 5vw, 42px); }
+    #card p { margin: 8px 0; line-height: 1.45; color: #dbe7f7; }
+    #startBtn {
+      margin-top: 18px;
+      padding: 14px 22px;
+      min-width: 180px;
+      border: 0;
+      border-radius: 999px;
+      font-size: 17px;
+      font-weight: 700;
+      background: white;
+      color: #08111d;
+    }
+    #status {
+      position: fixed;
+      z-index: 15;
+      left: 50%;
+      bottom: max(10px, env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      color: rgba(255,255,255,.9);
+      background: rgba(0,0,0,.48);
+      padding: 7px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #divider {
+      position: fixed;
+      z-index: 10;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 1px;
+      background: rgba(255,255,255,.15);
+      pointer-events: none;
+    }
+    #exitBtn {
+      position: fixed;
+      z-index: 14;
+      top: max(8px, env(safe-area-inset-top));
+      right: max(8px, env(safe-area-inset-right));
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 999px;
+      color: white;
+      background: rgba(0,0,0,.42);
+      padding: 8px 11px;
+      font-size: 12px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="start">
+    <div id="card">
+      <h1>NMOS VR Prototype</h1>
+      <p>Put the phone in a Cardboard-style viewer after starting.</p>
+      <p><b>Turn your head</b> to look around the transistor. This first version tests stereo + gyroscope tracking.</p>
+      <button id="startBtn">Start Phone VR</button>
+      <p style="font-size:12px;opacity:.75;margin-top:14px">
+        Best from an HTTPS page such as GitHub Pages. Landscape mode recommended.
+      </p>
+    </div>
+  </div>
+
+  <div id="divider"></div>
+  <div id="status">NMOS • stereoscopic prototype</div>
+  <button id="exitBtn">Exit</button>
+
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x05070a);
+    scene.fog = new THREE.Fog(0x05070a, 16, 38);
+
+    // ---------- Lighting ----------
+    scene.add(new THREE.HemisphereLight(0xbfdcff, 0x18202d, 1.7));
+
+    const key = new THREE.DirectionalLight(0xffffff, 2.2);
+    key.position.set(4, 8, 6);
+    scene.add(key);
+
+    const fill = new THREE.DirectionalLight(0x9cc6ff, 0.9);
+    fill.position.set(-5, 3, -4);
+    scene.add(fill);
+
+    // ---------- Helpers ----------
+    function box(w, h, d, color, opacity=1, roughness=.55, metalness=0) {
+      const mat = new THREE.MeshStandardMaterial({
+        color, transparent: opacity < 1, opacity,
+        roughness, metalness,
+        depthWrite: opacity >= 1
+      });
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+      return mesh;
+    }
+
+    function makeLabel(text, position, scale=1) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.font = '700 92px system-ui, Segoe UI, Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = 14;
+      ctx.strokeStyle = 'rgba(0,0,0,.72)';
+      ctx.strokeText(text, canvas.width/2, canvas.height/2);
+      ctx.fillStyle = 'white';
+      ctx.fillText(text, canvas.width/2, canvas.height/2);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.position.copy(position);
+      sprite.scale.set(4.0*scale, 1.0*scale, 1);
+      sprite.renderOrder = 30;
+      scene.add(sprite);
+      return sprite;
+    }
+
+    // ---------- Transistor: room-scale educational geometry ----------
+    const device = new THREE.Group();
+    scene.add(device);
+
+    // p-type silicon body
+    const substrate = box(11.0, 2.5, 5.2, 0xc98f62, 1, .78, 0);
+    substrate.position.set(0, 0.15, -2.0);
+    device.add(substrate);
+
+    // top silicon surface slab for visual contrast
+    const surface = box(11.1, 0.08, 5.3, 0xe4b087, 1, .65, 0);
+    surface.position.set(0, 1.44, -2.0);
+    device.add(surface);
+
+    // Source / drain n+ regions
+    const source = box(2.2, 0.85, 3.9, 0x3b87d9, 1, .42, .05);
+    source.position.set(-3.35, 1.05, -2.0);
+    device.add(source);
+
+    const drain = source.clone();
+    drain.material = source.material.clone();
+    drain.position.x = 3.35;
+    device.add(drain);
+
+    // Oxide
+    const oxide = box(4.5, 0.24, 3.7, 0xbfefff, 0.50, .25, 0);
+    oxide.position.set(0, 1.61, -2.0);
+    device.add(oxide);
+
+    // Gate
+    const gate = box(4.1, 0.52, 3.55, 0xb8bdc7, 1, .22, .75);
+    gate.position.set(0, 2.02, -2.0);
+    device.add(gate);
+
+    // Visible inversion channel
+    const channelMat = new THREE.MeshStandardMaterial({
+      color: 0x35e0d0,
+      emissive: 0x0f766e,
+      emissiveIntensity: 1.3,
+      transparent: true,
+      opacity: .88,
+      roughness: .25,
+      metalness: 0,
+    });
+    const channel = new THREE.Mesh(new THREE.BoxGeometry(4.35, .10, 3.55), channelMat);
+    channel.position.set(0, 1.49, -2.0);
+    device.add(channel);
+
+    // Soft glow shell around channel
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: 0x60fff1, transparent: true, opacity: .14, side: THREE.DoubleSide
+    });
+    const glow = new THREE.Mesh(new THREE.BoxGeometry(4.8,.24,3.95), glowMat);
+    glow.position.copy(channel.position);
+    device.add(glow);
+
+    // Floor grid / lab plane
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(42, 42),
+      new THREE.MeshStandardMaterial({ color: 0x0a0f16, roughness: .95, metalness: 0 })
+    );
+    floor.rotation.x = -Math.PI/2;
+    floor.position.y = -1.13;
+    scene.add(floor);
+
+    const grid = new THREE.GridHelper(42, 42, 0x26405c, 0x142233);
+    grid.position.y = -1.11;
+    scene.add(grid);
+
+    // Labels
+    makeLabel('SOURCE (n+)', new THREE.Vector3(-3.35, 3.0, -1.1), .72);
+    makeLabel('DRAIN (n+)',  new THREE.Vector3( 3.35, 3.0, -1.1), .72);
+    makeLabel('GATE',        new THREE.Vector3( 0.00, 3.55, -1.7), .80);
+    makeLabel('SiO₂',        new THREE.Vector3( 0.00, 2.75,  0.0), .55);
+    makeLabel('p-type silicon', new THREE.Vector3(0, .2, 1.0), .72);
+    makeLabel('inversion channel', new THREE.Vector3(0, 1.55, .65), .62);
+
+    // Gate field-guide lines (purely explanatory)
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x8feaff, transparent:true, opacity:.45 });
+    for (let x=-1.5; x<=1.5; x+=.75) {
+      const pts = [
+        new THREE.Vector3(x, 1.95, -1.4),
+        new THREE.Vector3(x, 1.50, -1.4)
+      ];
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat);
+      device.add(line);
+    }
+
+    // ---------- Stereo cameras ----------
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.setAnimationLoop(render);
+    document.body.appendChild(renderer.domElement);
+
+    const leftCam = new THREE.PerspectiveCamera(72, 1, 0.05, 80);
+    const rightCam = new THREE.PerspectiveCamera(72, 1, 0.05, 80);
+
+    const headPos = new THREE.Vector3(0, 1.55, 7.4);
+    const headQuat = new THREE.Quaternion();
+    const eyeOffset = 0.032; // ~64 mm IPD total
+
+    // ---------- Device orientation ----------
+    let gyroActive = false;
+    let alpha = 0, beta = 0, gamma = 0;
+    const euler = new THREE.Euler();
+    const zee = new THREE.Vector3(0, 0, 1);
+    const q0 = new THREE.Quaternion();
+    const q1 = new THREE.Quaternion(-Math.sqrt(.5), 0, 0, Math.sqrt(.5));
+
+    function screenOrientationRad() {
+      const angle = (screen.orientation && typeof screen.orientation.angle === 'number')
+        ? screen.orientation.angle
+        : (window.orientation || 0);
+      return THREE.MathUtils.degToRad(angle);
+    }
+
+    function updateOrientationQuaternion() {
+      if (!gyroActive) return;
+      const a = THREE.MathUtils.degToRad(alpha || 0);
+      const b = THREE.MathUtils.degToRad(beta || 0);
+      const g = THREE.MathUtils.degToRad(gamma || 0);
+      const orient = screenOrientationRad();
+
+      euler.set(b, a, -g, 'YXZ');
+      headQuat.setFromEuler(euler);
+      headQuat.multiply(q1);
+      headQuat.multiply(q0.setFromAxisAngle(zee, -orient));
+    }
+
+    function onOrientation(ev) {
+      if (ev.alpha == null) return;
+      alpha = ev.alpha;
+      beta = ev.beta;
+      gamma = ev.gamma;
+      gyroActive = true;
+    }
+
+    // Mouse/touch fallback look
+    let dragYaw = 0, dragPitch = 0, dragging = false, lastX=0, lastY=0;
+    renderer.domElement.addEventListener('pointerdown', e => {
+      dragging = true; lastX = e.clientX; lastY = e.clientY;
+    });
+    addEventListener('pointerup', () => dragging = false);
+    addEventListener('pointermove', e => {
+      if (!dragging || gyroActive) return;
+      dragYaw -= (e.clientX-lastX) * 0.004;
+      dragPitch -= (e.clientY-lastY) * 0.004;
+      dragPitch = Math.max(-1.35, Math.min(1.35, dragPitch));
+      lastX=e.clientX; lastY=e.clientY;
+      headQuat.setFromEuler(new THREE.Euler(dragPitch, dragYaw, 0, 'YXZ'));
+    });
+
+    addEventListener('deviceorientation', onOrientation, true);
+
+    // ---------- Start / fullscreen ----------
+    const startOverlay = document.getElementById('start');
+    const startBtn = document.getElementById('startBtn');
+    const exitBtn = document.getElementById('exitBtn');
+    const status = document.getElementById('status');
+
+    async function requestMotionPermissionIfNeeded() {
+      try {
+        if (typeof DeviceOrientationEvent !== 'undefined' &&
+            typeof DeviceOrientationEvent.requestPermission === 'function') {
+          const result = await DeviceOrientationEvent.requestPermission();
+          return result === 'granted';
+        }
+      } catch(e) {
+        console.warn(e);
+      }
+      return true;
+    }
+
+    startBtn.addEventListener('click', async () => {
+      await requestMotionPermissionIfNeeded();
+
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch(e) {}
+
+      try {
+        if (screen.orientation && screen.orientation.lock) {
+          await screen.orientation.lock('landscape');
+        }
+      } catch(e) {}
+
+      startOverlay.style.display = 'none';
+      exitBtn.style.display = 'block';
+
+      setTimeout(() => {
+        status.textContent = gyroActive
+          ? 'Gyroscope active • place phone in viewer'
+          : 'Move phone to activate gyro • drag fallback available';
+      }, 900);
+    });
+
+    exitBtn.addEventListener('click', async () => {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        try { await document.exitFullscreen(); } catch(e) {}
+      }
+      startOverlay.style.display = 'grid';
+      exitBtn.style.display = 'none';
+    });
+
+    // ---------- Animation ----------
+    const leftEyeLocal = new THREE.Vector3(-eyeOffset, 0, 0);
+    const rightEyeLocal = new THREE.Vector3(eyeOffset, 0, 0);
+    const leftWorld = new THREE.Vector3();
+    const rightWorld = new THREE.Vector3();
+
+    function render(t) {
+      updateOrientationQuaternion();
+
+      // Gentle channel pulse to make it easy to find in VR.
+      const pulse = 0.72 + 0.16 * (1 + Math.sin(t * 0.0024)) * .5;
+      channel.material.opacity = pulse;
+      glow.material.opacity = .10 + .07 * (1 + Math.sin(t * 0.0024)) * .5;
+
+      leftWorld.copy(leftEyeLocal).applyQuaternion(headQuat).add(headPos);
+      rightWorld.copy(rightEyeLocal).applyQuaternion(headQuat).add(headPos);
+
+      leftCam.position.copy(leftWorld);
+      rightCam.position.copy(rightWorld);
+      leftCam.quaternion.copy(headQuat);
+      rightCam.quaternion.copy(headQuat);
+
+      const w = renderer.domElement.width;
+      const h = renderer.domElement.height;
+      const half = Math.floor(w / 2);
+      const eyeAspect = half / h;
+
+      leftCam.aspect = eyeAspect;
+      rightCam.aspect = eyeAspect;
+      leftCam.updateProjectionMatrix();
+      rightCam.updateProjectionMatrix();
+
+      renderer.setScissorTest(true);
+
+      renderer.setViewport(0, 0, half, h);
+      renderer.setScissor(0, 0, half, h);
+      renderer.render(scene, leftCam);
+
+      renderer.setViewport(half, 0, w-half, h);
+      renderer.setScissor(half, 0, w-half, h);
+      renderer.render(scene, rightCam);
+
+      renderer.setScissorTest(false);
+    }
+
+    addEventListener('resize', () => {
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) dragging = false;
+    });
+  </script>
+</body>
+</html>
