@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>IC Design Lab — CMOS Inverter 3D + Interactive Phone VR</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071018;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+#ui{
+  position:fixed;z-index:20;left:14px;top:14px;width:min(370px,calc(100vw - 28px));
+  padding:14px;color:#eef7ff;background:rgba(7,16,24,.88);
+  border:1px solid rgba(255,255,255,.14);border-radius:16px;backdrop-filter:blur(8px)
+}
+h1{font-size:18px;margin:0 0 7px}.sub,.tiny{color:#a9bdd0}.sub{font-size:12px;line-height:1.35}.tiny{font-size:10px;margin-top:6px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.readout{display:flex;justify-content:space-between;font-size:12px;margin-top:4px}
+button{border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:8px 11px;background:rgba(255,255,255,.08);color:white;font-weight:650;font-size:12px}
+button.active{background:white;color:#0a1620}input[type=range]{width:100%}
+#state{margin-top:10px;padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.055);font-size:12px;line-height:1.4}
+#hint{position:fixed;z-index:10;left:50%;bottom:12px;transform:translateX(-50%);padding:7px 11px;border-radius:999px;background:rgba(0,0,0,.45);color:#d9e8f6;font-size:11px;white-space:nowrap}
+#divider{position:fixed;z-index:9;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.13);display:none;pointer-events:none}
+#exitVR{position:fixed;z-index:30;right:10px;top:10px;display:none;background:rgba(0,0,0,.5)}
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>CMOS Inverter — 3D Explorer</h1>
+  <div class="sub">Change <b>V<sub>IN</sub></b>, rotate the device, and then enter Phone VR. In VR, use the center reticle and hold your gaze on a control.</div>
+
+  <input id="vin" type="range" min="0" max="1" step="0.01" value="0">
+  <div class="readout">
+    <span>V<sub>IN</sub> = <b id="vinVal">0.00</b>·VDD</span>
+    <span>V<sub>OUT</sub> ≈ <b id="voutVal">1.00</b>·VDD</span>
+  </div>
+
+  <div class="row">
+    <button id="low" class="active">VIN Low</button>
+    <button id="mid">Transition</button>
+    <button id="high">VIN High</button>
+  </div>
+  <div class="row">
+    <button id="current" class="active">Current Path</button>
+    <button id="labels" class="active">Labels</button>
+    <button id="vr">Phone VR</button>
+  </div>
+
+  <div id="state"><b>PMOS ON</b> · NMOS OFF<br>Output is pulled toward VDD.</div>
+  <div class="tiny">Educational visualization. The transition region is illustrative rather than a transistor-model numerical simulation.</div>
+</div>
+
+<div id="divider"></div>
+<button id="exitVR">Exit VR</button>
+<div id="hint">Drag to rotate · wheel/pinch to zoom</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x071018);
+scene.fog=new THREE.Fog(0x071018,18,46);
+
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xcfe5ff,0x1b2430,1.55));
+let dl=new THREE.DirectionalLight(0xffffff,2.5);dl.position.set(6,9,6);scene.add(dl);
+dl=new THREE.DirectionalLight(0x7fb8ff,1.15);dl.position.set(-6,3,-5);scene.add(dl);
+
+const floor=new THREE.Mesh(
+  new THREE.PlaneGeometry(52,52),
+  new THREE.MeshStandardMaterial({color:0x0a141d,roughness:.96})
+);
+floor.rotation.x=-Math.PI/2; floor.position.y=-4.05; scene.add(floor);
+const grid=new THREE.GridHelper(52,52,0x2b4760,0x172a3a);grid.position.y=-4.02;scene.add(grid);
+
+function M(c,o=1,r=.5,metal=0,e=0,ei=0){
+  return new THREE.MeshStandardMaterial({
+    color:c,transparent:o<1,opacity:o,roughness:r,metalness:metal,
+    depthWrite:o>=1,emissive:e,emissiveIntensity:ei
+  });
+}
+function B(w,h,d,m){return new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m)}
+function spriteText(text,pos,scale=.65,color='white'){
+  const c=document.createElement('canvas');c.width=1024;c.height=256;const x=c.getContext('2d');
+  x.font='700 88px system-ui,Segoe UI,Arial';x.textAlign='center';x.textBaseline='middle';
+  x.lineWidth=16;x.strokeStyle='rgba(0,0,0,.82)';x.strokeText(text,512,128);
+  x.fillStyle=color;x.fillText(text,512,128);
+  const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false}));
+  sp.position.copy(pos);sp.scale.set(4.2*scale,1.05*scale,1);sp.renderOrder=100;scene.add(sp);return sp;
+}
+function panelTextSprite(text,w=5.2,h=1.0,font=58){
+  const c=document.createElement('canvas');c.width=1024;c.height=256;const x=c.getContext('2d');
+  x.clearRect(0,0,1024,256);x.font=`700 ${font}px system-ui,Segoe UI,Arial`;
+  x.textAlign='center';x.textBaseline='middle';x.fillStyle='white';x.fillText(text,512,128);
+  const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false}));
+  sp.scale.set(w,h,1);sp.userData.canvas=c;sp.userData.ctx=x;sp.userData.texture=tex;return sp;
+}
+function updatePanelText(sp,text,font=58){
+  const c=sp.userData.canvas,x=sp.userData.ctx;x.clearRect(0,0,c.width,c.height);
+  x.font=`700 ${font}px system-ui,Segoe UI,Arial`;x.textAlign='center';x.textBaseline='middle';
+  x.fillStyle='white';x.fillText(text,c.width/2,c.height/2);sp.userData.texture.needsUpdate=true;
+}
+
+// ---------- Physical CMOS model ----------
+const world=new THREE.Group();world.position.set(1.2,0,-1.6);scene.add(world);
+
+const rail=M(0x9ca8b5,1,.25,.75);
+let q=B(9,.22,.8,rail);q.position.set(0,4.5,0);world.add(q);
+q=B(9,.22,.8,rail.clone());q.position.set(0,-3.2,0);world.add(q);
+
+q=B(6.6,2.55,3.9,M(0x6e5ccf,.20,.35));q.position.set(0,2.6,0);world.add(q);
+q=B(5.4,1.55,3.1,M(0xb35f8a));q.position.set(0,2.65,0);world.add(q);
+q=B(5.4,1.55,3.1,M(0x4b78b8));q.position.set(0,-1.25,0);world.add(q);
+
+const pplus=M(0xef8bb6,1,.35), nplus=M(0x54a5f7,1,.35);
+q=B(1.15,.82,2.4,pplus);q.position.set(-1.75,2.68,0);world.add(q);
+q=B(1.15,.82,2.4,pplus.clone());q.position.set(1.75,2.68,0);world.add(q);
+q=B(1.15,.82,2.4,nplus);q.position.set(1.75,-1.22,0);world.add(q);
+q=B(1.15,.82,2.4,nplus.clone());q.position.set(-1.75,-1.22,0);world.add(q);
+
+const oxide=M(0xbdefff,.55,.2), gate=M(0xc7ccd3,1,.22,.7);
+q=B(1.55,.14,2.5,oxide);q.position.set(0,3.48,0);world.add(q);
+q=B(1.25,.42,2.38,gate);q.position.set(0,3.78,0);world.add(q);
+q=B(1.55,.14,2.5,oxide.clone());q.position.set(0,-.42,0);world.add(q);
+q=B(1.25,.42,2.38,gate.clone());q.position.set(0,-.12,0);world.add(q);
+
+const wire=M(0xd9e2ea,1,.2,.75);
+[
+ [.22,4.2,.32,-3.4,1.85,1.55],[3.05,.22,.32,-1.55,3.78,1.55],
+ [3.05,.22,.32,-1.55,-.12,1.55],[.28,1.05,.4,-1.75,4.0,1.45],
+ [.28,1.1,.4,1.75,-2.48,1.45],[.3,3.15,.42,1.75,.7,1.48],
+ [2.7,.3,.42,3.0,.72,1.48]
+].forEach(a=>{let z=B(a[0],a[1],a[2],wire.clone());z.position.set(a[3],a[4],a[5]);world.add(z)});
+
+const pCh=B(2.55,.12,2.36,M(0xff77ac,.9,.25,0,0x7c1c46,1.2));pCh.position.set(0,3.42,0);world.add(pCh);
+const nCh=B(2.55,.12,2.36,M(0x42e0ff,.12,.25,0,0x0d6778,.3));nCh.position.set(0,-.48,0);world.add(nCh);
+
+const labels=[
+  spriteText('VDD',new THREE.Vector3(1.2,5.2,-1.6),.62),
+  spriteText('PMOS',new THREE.Vector3(5.0,3,-1.6),.72),
+  spriteText('VIN',new THREE.Vector3(-3.0,1.85,0),.60),
+  spriteText('VOUT',new THREE.Vector3(6.2,.72,0),.66),
+  spriteText('NMOS',new THREE.Vector3(5.0,-1.1,-1.6),.72),
+  spriteText('GND',new THREE.Vector3(1.2,-3.85,-1.6),.62)
+];
+
+const particleGroup=new THREE.Group();world.add(particleGroup);
+const particles=[];
+for(let i=0;i<14;i++){
+  const s=new THREE.Mesh(new THREE.SphereGeometry(.105,16,16),M(0xffcf74,1,.2,0,0xff8a00,1.5));
+  particleGroup.add(s);particles.push(s);
+}
+
+// ---------- Normal UI state ----------
+let vin=0,showCurrent=true,showLabels=true,vrMode=false;
+const vinEl=document.getElementById('vin'),vinVal=document.getElementById('vinVal'),voutVal=document.getElementById('voutVal'),state=document.getElementById('state');
+function ss(a,b,x){x=Math.min(1,Math.max(0,(x-a)/(b-a)));return x*x*(3-2*x)}
+function updateState(){
+  vin=+vinEl.value;
+  const nd=ss(.35,.72,vin), pd=1-ss(.28,.65,vin), vo=pd/(pd+nd+1e-6);
+  vinVal.textContent=vin.toFixed(2);voutVal.textContent=vo.toFixed(2);
+  pCh.material.opacity=.08+.82*pd;pCh.material.emissiveIntensity=.2+1.7*pd;
+  nCh.material.opacity=.08+.82*nd;nCh.material.emissiveIntensity=.2+1.7*nd;
+  if(vin<.32) state.innerHTML='<b>PMOS ON</b> · NMOS OFF<br>Output is pulled toward VDD.';
+  else if(vin>.68) state.innerHTML='PMOS OFF · <b>NMOS ON</b><br>Output is pulled toward GND.';
+  else state.innerHTML='<b>Transition region</b><br>Both devices may conduct; overlap is illustrative.';
+  low.classList.toggle('active',vin<.2);mid.classList.toggle('active',vin>=.2&&vin<=.8);high.classList.toggle('active',vin>.8);
+  updateVRReadout(vo);
+}
+vinEl.oninput=updateState;
+low.onclick=()=>{vinEl.value=0;updateState()};
+mid.onclick=()=>{vinEl.value=.5;updateState()};
+high.onclick=()=>{vinEl.value=1;updateState()};
+current.onclick=e=>{showCurrent=!showCurrent;e.currentTarget.classList.toggle('active',showCurrent);syncVRButtons()};
+document.getElementById('labels').onclick=e=>{showLabels=!showLabels;labels.forEach(x=>x.visible=showLabels);e.currentTarget.classList.toggle('active',showLabels);syncVRButtons()};
+
+// ---------- Normal orbit camera ----------
+const cam=new THREE.PerspectiveCamera(56,innerWidth/innerHeight,.05,100);
+const target=new THREE.Vector3(1.2,.6,-1.6);let yaw=.72,pitch=.16,dist=16,drag=false,lx=0,ly=0;
+function camera(){
+  cam.position.set(target.x+dist*Math.sin(yaw)*Math.cos(pitch),target.y+dist*Math.sin(pitch),target.z+dist*Math.cos(yaw)*Math.cos(pitch));
+  cam.lookAt(target)
+}
+camera();
+renderer.domElement.onpointerdown=e=>{if(vrMode)return;drag=true;lx=e.clientX;ly=e.clientY};
+addEventListener('pointerup',()=>drag=false);
+addEventListener('pointermove',e=>{
+  if(!drag||vrMode)return;
+  yaw-=(e.clientX-lx)*.006;pitch+=(e.clientY-ly)*.005;pitch=Math.max(-1.15,Math.min(1.15,pitch));
+  lx=e.clientX;ly=e.clientY;camera()
+});
+renderer.domElement.addEventListener('wheel',e=>{
+  if(vrMode)return;dist*=Math.exp(e.deltaY*.001);dist=Math.max(8,Math.min(28,dist));camera()
+},{passive:true});
+
+// ---------- In-world VR control panel ----------
+const vrPanel=new THREE.Group();
+vrPanel.position.set(-5.6,.65,-1.5);
+scene.add(vrPanel);
+vrPanel.visible=false;
+
+const panelBack=B(6.6,7.4,.18,M(0x0b1b29,.88,.5,0,0x05111a,.3));
+panelBack.position.z=-.16;vrPanel.add(panelBack);
+
+const title=panelTextSprite('CMOS INVERTER — VR CONTROL',5.6,.75,52);title.position.set(0,3.1,.05);vrPanel.add(title);
+const help=panelTextSprite('LOOK + HOLD TO ACTIVATE',4.8,.55,42);help.position.set(0,2.55,.05);vrPanel.add(help);
+
+const vrVin=panelTextSprite('VIN = 0.00 VDD',4.8,.75,58);vrVin.position.set(0,1.95,.05);vrPanel.add(vrVin);
+const vrVout=panelTextSprite('VOUT ≈ 1.00 VDD',4.8,.75,58);vrVout.position.set(0,1.35,.05);vrPanel.add(vrVout);
+const vrState=panelTextSprite('PMOS ON • NMOS OFF',5.2,.7,50);vrState.position.set(0,.78,.05);vrPanel.add(vrState);
+
+const interactive=[];
+function makeVRButton(text,x,y,w=1.65,h=.62,action=null){
+  const mesh=B(w,h,.18,M(0x264158,1,.35,0,0x000000,0));
+  mesh.position.set(x,y,.12);mesh.userData={action,base:0x264158,text};vrPanel.add(mesh);
+  const sp=panelTextSprite(text,w*.9,h*.72,48);sp.position.set(x,y,.25);vrPanel.add(sp);
+  mesh.userData.label=sp;interactive.push(mesh);return mesh;
+}
+const bLow=makeVRButton('VIN LOW',-2.05,.05,1.65,.62,'low');
+const bMid=makeVRButton('MID',0,.05,1.35,.62,'mid');
+const bHigh=makeVRButton('VIN HIGH',2.05,.05,1.65,.62,'high');
+const bMinus=makeVRButton('− 0.10',-1.15,-.85,1.8,.62,'minus');
+const bPlus=makeVRButton('+ 0.10',1.15,-.85,1.8,.62,'plus');
+const bCurrent=makeVRButton('CURRENT: ON',0,-1.78,3.25,.66,'current');
+const bLabels=makeVRButton('LABELS: ON',0,-2.65,3.25,.66,'labels');
+
+function syncVRButtons(){
+  updatePanelText(bCurrent.userData.label,`CURRENT: ${showCurrent?'ON':'OFF'}`,44);
+  updatePanelText(bLabels.userData.label,`LABELS: ${showLabels?'ON':'OFF'}`,44);
+}
+function updateVRReadout(vo){
+  if(!vrVin)return;
+  updatePanelText(vrVin,`VIN = ${vin.toFixed(2)} VDD`,58);
+  updatePanelText(vrVout,`VOUT ≈ ${vo.toFixed(2)} VDD`,58);
+  if(vin<.32)updatePanelText(vrState,'PMOS ON • NMOS OFF',48);
+  else if(vin>.68)updatePanelText(vrState,'PMOS OFF • NMOS ON',48);
+  else updatePanelText(vrState,'TRANSITION • BOTH CONDUCT',46);
+}
+function trigger(action){
+  if(action==='low')vinEl.value=0;
+  if(action==='mid')vinEl.value=.5;
+  if(action==='high')vinEl.value=1;
+  if(action==='minus')vinEl.value=Math.max(0,(+vinEl.value-.1)).toFixed(2);
+  if(action==='plus')vinEl.value=Math.min(1,(+vinEl.value+.1)).toFixed(2);
+  if(['low','mid','high','minus','plus'].includes(action))updateState();
+  if(action==='current'){showCurrent=!showCurrent;document.getElementById('current').classList.toggle('active',showCurrent);syncVRButtons()}
+  if(action==='labels'){showLabels=!showLabels;labels.forEach(x=>x.visible=showLabels);document.getElementById('labels').classList.toggle('active',showLabels);syncVRButtons()}
+}
+
+// ---------- Phone head tracking ----------
+const lc=new THREE.PerspectiveCamera(72,1,.05,100),rc=new THREE.PerspectiveCamera(72,1,.05,100);
+const headPos=new THREE.Vector3(0,.9,10.5),headQuat=new THREE.Quaternion(),eu=new THREE.Euler(),zee=new THREE.Vector3(0,0,1),q0=new THREE.Quaternion(),q1=new THREE.Quaternion(-Math.sqrt(.5),0,0,Math.sqrt(.5));
+let A=0,Bb=0,G=0,gyro=false;
+addEventListener('deviceorientation',e=>{if(e.alpha==null)return;A=e.alpha;Bb=e.beta;G=e.gamma;gyro=true},true);
+function orient(){return THREE.MathUtils.degToRad((screen.orientation&&typeof screen.orientation.angle==='number')?screen.orientation.angle:(window.orientation||0))}
+function updateHead(){
+  if(!gyro)return;
+  eu.set(THREE.MathUtils.degToRad(Bb||0),THREE.MathUtils.degToRad(A||0),-THREE.MathUtils.degToRad(G||0),'YXZ');
+  headQuat.setFromEuler(eu);headQuat.multiply(q1);headQuat.multiply(q0.setFromAxisAngle(zee,-orient()))
+}
+async function permission(){
+  try{
+    if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
+      return(await DeviceOrientationEvent.requestPermission())==='granted'
+    }
+  }catch(e){}
+  return true
+}
+
+// Reticle / gaze
+const reticle=new THREE.Mesh(
+  new THREE.RingGeometry(.018,.032,40),
+  new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.95,side:THREE.DoubleSide,depthTest:false})
+);
+reticle.renderOrder=200;reticle.visible=false;scene.add(reticle);
+
+const raycaster=new THREE.Raycaster(),forward=new THREE.Vector3(),tmp=new THREE.Vector3();
+let gazeTarget=null,gazeStart=0,gazeFired=false;
+function updateGaze(ms){
+  forward.set(0,0,-1).applyQuaternion(headQuat).normalize();
+  reticle.position.copy(headPos).add(tmp.copy(forward).multiplyScalar(2.25));
+  reticle.quaternion.copy(headQuat);
+
+  raycaster.set(headPos,forward);
+  const hit=raycaster.intersectObjects(interactive,false)[0];
+  const target=hit?hit.object:null;
+
+  interactive.forEach(b=>{
+    b.material.color.setHex(b===target?0x4f82a5:0x264158);
+    b.material.emissive.setHex(b===target?0x113f59:0x000000);
+    b.material.emissiveIntensity=b===target?.8:0;
+    b.scale.setScalar(1);
+  });
+
+  if(target!==gazeTarget){
+    gazeTarget=target;gazeStart=ms;gazeFired=false;
+  }
+  if(target){
+    const progress=Math.min(1,(ms-gazeStart)/900);
+    target.scale.setScalar(1+progress*.08);
+    reticle.material.color.setHex(progress>.72?0x79ffd8:0xffffff);
+    if(progress>=1&&!gazeFired){
+      gazeFired=true;trigger(target.userData.action)
+    }
+  }else{
+    reticle.material.color.setHex(0xffffff)
+  }
+}
+
+// ---------- Enter/exit phone VR ----------
+const divider=document.getElementById('divider'),exitVR=document.getElementById('exitVR'),ui=document.getElementById('ui'),hint=document.getElementById('hint');
+vr.onclick=async()=>{
+  await permission();vrMode=true;
+  try{if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen()}catch(e){}
+  try{if(screen.orientation?.lock)await screen.orientation.lock('landscape')}catch(e){}
+  ui.style.display='none';divider.style.display='block';exitVR.style.display='block';
+  hint.textContent='Look at a VR control and hold your gaze';
+  vrPanel.visible=true;reticle.visible=true;syncVRButtons()
+};
+exitVR.onclick=async()=>{
+  vrMode=false;vrPanel.visible=false;reticle.visible=false;gazeTarget=null;
+  try{if(document.fullscreenElement&&document.exitFullscreen)await document.exitFullscreen()}catch(e){}
+  ui.style.display='block';divider.style.display='none';exitVR.style.display='none';hint.textContent='Drag to rotate · wheel/pinch to zoom'
+};
+
+// ---------- Current path animation ----------
+function setParticle(p,t,m){
+  if(m==='p'){
+    if(t<.35){let u=t/.35;p.position.set(-1.75,4.35-1.3*u,1.45)}
+    else{let u=(t-.35)/.65;p.position.set(-1.75+3.55*u,3.05-2.28*u,1.48)}
+  }else if(m==='n'){
+    if(t<.55){let u=t/.55;p.position.set(4.2-2.45*u,.72-1.85*u,1.48)}
+    else{let u=(t-.55)/.45;p.position.set(1.75,-1.13-2*u,1.45)}
+  }else{
+    if(t<.25){let u=t/.25;p.position.set(-1.75,4.35-1.3*u,1.45)}
+    else if(t<.55){let u=(t-.25)/.30;p.position.set(-1.75+3.5*u,3.05-2.33*u,1.48)}
+    else{let u=(t-.55)/.45;p.position.set(1.75,.72-3.85*u,1.45)}
+  }
+}
+
+// ---------- Stereo render ----------
+const le=new THREE.Vector3(-.032,0,0),re=new THREE.Vector3(.032,0,0),lw=new THREE.Vector3(),rw=new THREE.Vector3();
+function render(ms){
+  const mode=vin<.32?'p':vin>.68?'n':'both';
+  particleGroup.visible=showCurrent;
+  particles.forEach((p,i)=>setParticle(p,(ms*(mode==='both'?.00012:.00016)+i/particles.length)%1,mode));
+
+  if(!vrMode){
+    renderer.setScissorTest(false);
+    renderer.setViewport(0,0,renderer.domElement.width,renderer.domElement.height);
+    renderer.render(scene,cam);return
+  }
+
+  updateHead();updateGaze(ms);
+  const w=renderer.domElement.width,h=renderer.domElement.height,half=Math.floor(w/2),asp=half/h;
+  lc.aspect=rc.aspect=asp;lc.updateProjectionMatrix();rc.updateProjectionMatrix();
+  lw.copy(le).applyQuaternion(headQuat).add(headPos);rw.copy(re).applyQuaternion(headQuat).add(headPos);
+  lc.position.copy(lw);rc.position.copy(rw);lc.quaternion.copy(headQuat);rc.quaternion.copy(headQuat);
+
+  renderer.setScissorTest(true);
+  renderer.setViewport(0,0,half,h);renderer.setScissor(0,0,half,h);renderer.render(scene,lc);
+  renderer.setViewport(half,0,w-half,h);renderer.setScissor(half,0,w-half,h);renderer.render(scene,rc);
+  renderer.setScissorTest(false)
+}
+renderer.setAnimationLoop(render);
+
+addEventListener('resize',()=>{
+  renderer.setSize(innerWidth,innerHeight);
+  cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()
+});
+
+syncVRButtons();
+updateState();
+</script>
+</body>
+</html>
