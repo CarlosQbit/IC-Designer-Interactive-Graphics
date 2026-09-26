@@ -1,0 +1,46 @@
+html,body{
+  margin:0;width:100%;height:100%;overflow:hidden;background:#071018;color:#eef7ff;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif
+}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+#entry{
+  position:fixed;z-index:30;inset:0;display:grid;place-items:center;
+  padding:20px;background:
+  radial-gradient(circle at 50% 38%,rgba(28,70,105,.60),rgba(7,16,24,.94) 48%,rgba(7,16,24,.98));
+}
+.entryCard{
+  width:min(560px,calc(100vw - 32px));padding:28px;border:1px solid rgba(255,255,255,.16);
+  border-radius:24px;background:rgba(8,19,29,.90);text-align:center;backdrop-filter:blur(12px)
+}
+.eyebrow{font-size:10px;letter-spacing:.18em;color:#87a7c0;font-weight:800}
+.entryCard h1{font-size:clamp(26px,5vw,46px);line-height:1.02;margin:8px 0 12px}
+.entryCard p{font-size:14px;line-height:1.45;color:#c4d6e4;margin:0 auto 20px;max-width:460px}
+#enterVR{
+  width:100%;min-height:64px;border:1px solid rgba(255,255,255,.32);border-radius:18px;
+  background:#eef7ff;color:#071018;font-weight:900;font-size:18px;letter-spacing:.02em
+}
+#enterVR:disabled{opacity:.45}
+#entryStatus{margin-top:12px;color:#a9c9df;font-size:12px}
+.entryNote{margin-top:16px;font-size:11px;line-height:1.45;color:#8fa9bb}
+#hud{
+  position:fixed;z-index:10;left:16px;top:16px;width:min(390px,calc(100vw - 32px));
+  padding:15px;border:1px solid rgba(255,255,255,.14);border-radius:18px;
+  background:rgba(7,16,24,.88);backdrop-filter:blur(10px)
+}
+#hud h2{font-size:18px;line-height:1.15;margin:5px 0 8px}
+#hud p{font-size:12px;line-height:1.42;color:#b5c9da;margin:0 0 12px}
+.sliderLabel{display:grid;grid-template-columns:42px 1fr 80px;gap:8px;align-items:center;font-size:12px}
+.sliderLabel strong{text-align:right;font-size:11px}
+input[type=range]{width:100%}
+.buttonRow{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+button{
+  border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:white;
+  border-radius:999px;padding:8px 11px;font-weight:700;font-size:11px
+}
+#state{margin-top:9px;padding:8px 10px;border-radius:11px;background:rgba(255,255,255,.055);font-size:11px}
+#desktopHint{
+  position:fixed;z-index:5;left:50%;bottom:14px;transform:translateX(-50%);
+  padding:7px 11px;border-radius:999px;background:rgba(0,0,0,.45);font-size:11px;white-space:nowrap
+}
+body.xr-active #entry,body.xr-active #hud,body.xr-active #desktopHint{display:none}
+body.preview #entry{display:none}

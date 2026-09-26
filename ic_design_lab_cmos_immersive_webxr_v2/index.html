@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#071018">
+  <title>IC Design Lab — Immersive CMOS Lab</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="entry">
+    <div class="entryCard">
+      <div class="eyebrow">IC DESIGN LAB · WEBXR</div>
+      <h1>Step inside the CMOS inverter</h1>
+      <p id="entryMessage">
+        Open this HTTPS page in Meta Quest Browser, then enter immersive VR.
+      </p>
+      <button id="enterVR" disabled>CHECKING VR…</button>
+      <div id="entryStatus">Detecting immersive WebXR support…</div>
+      <div class="entryNote">
+        The browser page is only the launcher. After entering VR, the browser window is replaced by the 3D XR world.
+      </div>
+    </div>
+  </div>
+
+  <div id="hud">
+    <div class="eyebrow">DESKTOP PREVIEW</div>
+    <h2>CMOS Inverter — Immersive WebXR</h2>
+    <p>Use this view to preview the lesson. On Quest, use the large <b>ENTER IMMERSIVE VR</b> button.</p>
+
+    <label class="sliderLabel">
+      <span>VIN</span>
+      <input id="vin" type="range" min="0" max="1" step="0.01" value="0">
+      <strong id="vinValue">0.00 VDD</strong>
+    </label>
+
+    <div class="buttonRow">
+      <button id="low">VIN Low</button>
+      <button id="mid">Transition</button>
+      <button id="high">VIN High</button>
+    </div>
+
+    <div class="buttonRow">
+      <button id="toggleCurrent">Current Path: ON</button>
+      <button id="toggleLabels">Labels: ON</button>
+    </div>
+
+    <div id="state">PMOS ON · NMOS OFF · VOUT ≈ VDD</div>
+  </div>
+
+  <div id="desktopHint">Desktop preview · drag to orbit · wheel to zoom</div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
